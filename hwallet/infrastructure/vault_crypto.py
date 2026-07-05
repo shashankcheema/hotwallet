@@ -4,6 +4,7 @@ import json
 import secrets
 from typing import Any
 
+from argon2.low_level import Type, hash_secret_raw
 from Crypto.Cipher import AES
 
 
@@ -13,6 +14,10 @@ KEY_BYTES = 32
 SCRYPT_N = 2**14
 SCRYPT_R = 8
 SCRYPT_P = 1
+ARGON2_TIME_COST = 3
+ARGON2_MEMORY_COST = 64 * 1024
+ARGON2_PARALLELISM = 2
+ARGON2_VERSION = 19
 
 
 def _b64encode(data: bytes) -> str:
@@ -39,6 +44,25 @@ def _derive_key(password: str, salt: bytes) -> bytearray:
                 r=SCRYPT_R,
                 p=SCRYPT_P,
                 dklen=KEY_BYTES,
+            )
+        )
+    finally:
+        _zeroize(password_bytes)
+
+
+def _derive_argon2id_key(password: str, salt: bytes) -> bytearray:
+    password_bytes = bytearray(password.encode("utf-8"))
+    try:
+        return bytearray(
+            hash_secret_raw(
+                secret=bytes(password_bytes),
+                salt=salt,
+                time_cost=ARGON2_TIME_COST,
+                memory_cost=ARGON2_MEMORY_COST,
+                parallelism=ARGON2_PARALLELISM,
+                hash_len=KEY_BYTES,
+                type=Type.ID,
+                version=ARGON2_VERSION,
             )
         )
     finally:
@@ -78,16 +102,56 @@ def encryptWallet(seed_phrase: str, password: str) -> str:
     return json.dumps(payload, separators=(",", ":"))
 
 
+def encryptVault(seed_phrase: str, password: str) -> str:
+    salt = secrets.token_bytes(SALT_BYTES)
+    iv = secrets.token_bytes(IV_BYTES)
+    key = _derive_argon2id_key(password, salt)
+
+    seed_bytes = bytearray(seed_phrase.encode("utf-8"))
+    try:
+        cipher = AES.new(key, AES.MODE_GCM, nonce=iv)
+        ciphertext, auth_tag = cipher.encrypt_and_digest(seed_bytes)
+    finally:
+        _zeroize(seed_bytes)
+        _zeroize(key)
+
+    payload = {
+        "version": 2,
+        "kdf": {
+            "name": "argon2id",
+            "time_cost": ARGON2_TIME_COST,
+            "memory_cost": ARGON2_MEMORY_COST,
+            "parallelism": ARGON2_PARALLELISM,
+            "key_bytes": KEY_BYTES,
+        },
+        "cipher": {
+            "name": "AES-256-GCM",
+            "salt": _b64encode(salt),
+            "iv": _b64encode(iv),
+            "ciphertext": _b64encode(ciphertext),
+            "auth_tag": _b64encode(auth_tag),
+        },
+    }
+    return json.dumps(payload, separators=(",", ":"))
+
+
 def decryptWalletBytes(payload: str | dict[str, Any], password: str) -> bytearray:
     data = json.loads(payload) if isinstance(payload, str) else payload
     cipher_data = data["cipher"]
+    kdf_data = data["kdf"]
 
     salt = _b64decode(cipher_data["salt"])
     iv = _b64decode(cipher_data["iv"])
     ciphertext = _b64decode(cipher_data["ciphertext"])
     auth_tag = _b64decode(cipher_data["auth_tag"])
 
-    key = _derive_key(password, salt)
+    kdf_name = str(kdf_data.get("name", "scrypt")).lower()
+    if kdf_name == "scrypt":
+        key = _derive_key(password, salt)
+    elif kdf_name == "argon2id":
+        key = _derive_argon2id_key(password, salt)
+    else:
+        raise ValueError(f"Unsupported key derivation function: {kdf_name}")
     plaintext = bytearray()
     try:
         cipher = AES.new(key, AES.MODE_GCM, nonce=iv)
@@ -103,4 +167,3 @@ def decryptWallet(payload: str | dict[str, Any], password: str) -> str:
         return plaintext.decode("utf-8")
     finally:
         _zeroize(plaintext)
-

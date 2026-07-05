@@ -4,7 +4,7 @@ import json
 import unittest
 from unittest.mock import patch
 
-from hwallet.infrastructure.vault_crypto import decryptWallet, decryptWalletBytes, encryptWallet
+from hwallet.infrastructure.vault_crypto import decryptWallet, decryptWalletBytes, encryptVault, encryptWallet
 
 
 MNEMONIC = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"
@@ -61,3 +61,13 @@ class VaultCryptoTests(unittest.TestCase):
         finally:
             for index in range(len(plaintext_bytes)):
                 plaintext_bytes[index] = 0
+
+    def test_encrypt_vault_uses_argon2_and_round_trips(self) -> None:
+        with patch(
+            "hwallet.infrastructure.vault_crypto.secrets.token_bytes",
+            side_effect=[b"\x03" * 16, b"\x04" * 12],
+        ):
+            payload = encryptVault(MNEMONIC, PASSWORD)
+
+        self.assertEqual(decryptWallet(payload, PASSWORD), MNEMONIC)
+        self.assertEqual(json.loads(payload)["kdf"]["name"], "argon2id")

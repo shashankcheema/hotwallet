@@ -29,6 +29,8 @@ wallet-payload*.json
 signed-transaction*.hex
 *.signed.hex
 *.wallet.json
+wallet_state.json
+vault.json
 
 # Editor and OS files
 .DS_Store

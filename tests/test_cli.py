@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import json
 import os
 import unittest
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
+
+from click.testing import CliRunner
 
 
 class CliTests(unittest.TestCase):
@@ -166,3 +169,186 @@ class CliTests(unittest.TestCase):
         print_mock.assert_any_call("Status: SUCCESS")
         print_mock.assert_any_call("Success: true")
         fake_client.close.assert_called_once()
+
+
+class WalletCliAppTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.runner = CliRunner()
+
+    VALID_MNEMONIC = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"
+
+    def test_init_command_writes_vault_and_state(self) -> None:
+        from hwallet.cli import app as wallet_app
+
+        with self.runner.isolated_filesystem():
+            with patch.object(wallet_app, "generate_mnemonic", return_value=self.VALID_MNEMONIC), patch.object(
+                wallet_app, "derive_hedera_ed25519_key", return_value="deadbeef"
+            ), patch(
+                "hwallet.infrastructure.vault_crypto.secrets.token_bytes",
+                side_effect=[b"\x01" * 16, b"\x02" * 12],
+            ):
+                result = self.runner.invoke(
+                    wallet_app.cli,
+                    [
+                        "init",
+                        "--account-id",
+                        "0.0.1001",
+                        "--nickname",
+                        "treasury",
+                        "--vault-path",
+                        "vault.json",
+                        "--state-path",
+                        "wallet_state.json",
+                    ],
+                    input="passphrase\npassphrase\n",
+                )
+
+            self.assertEqual(result.exit_code, 0, result.output)
+            with open("vault.json", encoding="utf-8") as vault_file:
+                vault_payload = json.loads(vault_file.read())
+            with open("wallet_state.json", encoding="utf-8") as state_file:
+                state_payload = json.loads(state_file.read())
+            self.assertEqual(vault_payload["kdf"]["name"], "argon2id")
+            self.assertEqual(state_payload["accounts"][0]["account_id"], "0.0.1001")
+            self.assertEqual(state_payload["accounts"][0]["nickname"], "treasury")
+            self.assertIn("Mnemonic:", result.output)
+
+    def test_balance_command_prints_snapshot(self) -> None:
+        from hwallet.cli import app as wallet_app
+
+        with self.runner.isolated_filesystem():
+            with open("wallet_state.json", "w", encoding="utf-8") as handle:
+                handle.write(
+                    json.dumps(
+                        {
+                            "version": 1,
+                            "accounts": [
+                                {
+                                    "account_id": "0.0.1001",
+                                    "nickname": "treasury",
+                                    "address_index": 0,
+                                    "public_alias": "main-treasury",
+                                }
+                            ],
+                        }
+                    )
+                )
+
+            fake_snapshot = SimpleNamespace(
+                account_id="0.0.1001",
+                hbar_balance_tinybars=250_000_000,
+                token_balances=[{"token_id": "0.0.2001", "balance": 5}],
+            )
+
+            with patch.object(wallet_app, "resolve_hedera_network_profile", return_value=SimpleNamespace(network="testnet")), patch(
+                "hwallet.cli.app.MirrorNodeClient"
+            ) as mirror_client_cls:
+                mirror_client_cls.return_value.get_account_snapshot.return_value = fake_snapshot
+                result = self.runner.invoke(
+                    wallet_app.cli,
+                    ["balance", "--account-id", "0.0.1001", "--state-path", "wallet_state.json"],
+                )
+
+            self.assertEqual(result.exit_code, 0, result.output)
+            self.assertIn("HBAR: 2.5 HBAR", result.output)
+            self.assertIn("0.0.2001", result.output)
+
+    def test_history_command_prints_ledger(self) -> None:
+        from hwallet.cli import app as wallet_app
+
+        with self.runner.isolated_filesystem():
+            with open("wallet_state.json", "w", encoding="utf-8") as handle:
+                handle.write(
+                    json.dumps(
+                        {
+                            "version": 1,
+                            "accounts": [
+                                {
+                                    "account_id": "0.0.1001",
+                                    "nickname": "treasury",
+                                    "address_index": 0,
+                                }
+                            ],
+                        }
+                    )
+                )
+
+            with patch.object(wallet_app, "resolve_hedera_network_profile", return_value=SimpleNamespace(network="testnet")), patch(
+                "hwallet.cli.app.MirrorNodeClient"
+            ) as mirror_client_cls:
+                mirror_client_cls.return_value.get_transactions.return_value = [
+                    {
+                        "consensus_timestamp": "1.2.3",
+                        "transaction_id": "0.0.1001-123",
+                        "name": "CRYPTOTRANSFER",
+                        "result": "SUCCESS",
+                        "transfers": [{"account": "0.0.1001", "amount": 123_000_000}],
+                    }
+                ]
+                result = self.runner.invoke(
+                    wallet_app.cli,
+                    ["history", "--account-id", "0.0.1001", "--state-path", "wallet_state.json"],
+                )
+
+            self.assertEqual(result.exit_code, 0, result.output)
+            self.assertIn("0.0.1001-123", result.output)
+            self.assertIn("CRYPTOTRANSFER", result.output)
+
+    def test_transfer_command_broadcasts_transaction(self) -> None:
+        from hwallet.cli import app as wallet_app
+
+        with self.runner.isolated_filesystem():
+            with open("wallet_state.json", "w", encoding="utf-8") as handle:
+                handle.write(
+                    json.dumps(
+                        {
+                            "version": 1,
+                            "accounts": [
+                                {
+                                    "account_id": "0.0.1001",
+                                    "nickname": "treasury",
+                                    "address_index": 0,
+                                }
+                            ],
+                        }
+                    )
+                )
+            with open("vault.json", "w", encoding="utf-8") as handle:
+                handle.write("{}")
+
+            fake_receipt = SimpleNamespace(transaction_id=SimpleNamespace(to_string=lambda: "0.0.1001@1.2.3"))
+            fake_result = SimpleNamespace(status="SUCCESS", receipt=fake_receipt)
+            fake_client = SimpleNamespace(close=MagicMock())
+
+            with patch.object(wallet_app, "resolve_hedera_network_profile", return_value=SimpleNamespace(network="testnet", operator_id="0.0.123", operator_key="key", node_account_id="0.0.3")), patch(
+                "hwallet.cli.app.SIGNING_SERVICE"
+            ) as signing_service, patch.object(wallet_app, "EXECUTION_SERVICE") as execution_service:
+                signing_service.load_key_buffer.return_value = bytearray(b"key")
+                signing_service.build_signed_transfer.return_value = b"signed-bytes"
+                execution_service.create_client.return_value = fake_client
+                execution_service.execute_signed_hex.return_value = fake_result
+
+                result = self.runner.invoke(
+                    wallet_app.cli,
+                    [
+                        "transfer",
+                        "--to",
+                        "0.0.1002",
+                        "--amount",
+                        "1.5",
+                        "--memo",
+                        "memo",
+                        "--from-account",
+                        "0.0.1001",
+                        "--vault-path",
+                        "vault.json",
+                        "--state-path",
+                        "wallet_state.json",
+                    ],
+                    input="passphrase\n",
+                )
+
+            self.assertEqual(result.exit_code, 0, result.output)
+            self.assertIn("Consensus transaction ID:", result.output)
+            signing_service.load_key_buffer.assert_called_once()
+            execution_service.execute_signed_hex.assert_called_once()
