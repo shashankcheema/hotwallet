@@ -18,6 +18,7 @@ from hiero_sdk_python import (
 
 from hwallet.infrastructure.vault_crypto import decryptWalletBytes
 from hwallet.domain.key_derivation import derive_hedera_ed25519_key
+from hwallet.application.network_client import HederaNetworkClient, NetworkClientWrapper
 
 
 DEFAULT_NODE_ACCOUNT_ID = AccountId.from_string("0.0.3")
@@ -40,7 +41,6 @@ class ExecutionResult:
     status: ResponseCode | int
     success: bool
     receipt: TransactionReceipt
-
 
 class HederaSigningService:
     def __init__(self, node_account_id: AccountId = DEFAULT_NODE_ACCOUNT_ID) -> None:
@@ -111,13 +111,13 @@ class HederaSigningService:
 
 
 class HederaExecutionService:
-    def create_client(self, operator_id: str, operator_key: str) -> Client:
+    def create_client(self, operator_id: str, operator_key: str) -> NetworkClientWrapper:
         client = Client.for_testnet()
         client.set_operator(
             AccountId.from_string(operator_id),
             PrivateKey.from_string(operator_key),
         )
-        return client
+        return HederaNetworkClient(client=client)
 
     def rehydrate_tx_from_hex(self, signed_transaction_hex: str) -> Transaction:
         raw_bytes = bytes.fromhex(signed_transaction_hex.strip())
@@ -129,12 +129,12 @@ class HederaExecutionService:
     def execute_signed_hex(
         self,
         signed_transaction_hex: str,
-        client: Client,
+        client: NetworkClientWrapper,
     ) -> ExecutionResult:
         transaction = self.rehydrate_tx_from_hex(signed_transaction_hex)
 
         try:
-            response = transaction.execute(client, wait_for_receipt=False)
+            response = transaction.execute(client.client, wait_for_receipt=False)
         except PrecheckError as error:
             raise RuntimeError(f"Precheck failed: {error.status}") from error
 
@@ -142,7 +142,7 @@ class HederaExecutionService:
             raise RuntimeError("Unexpected execute() return type.")
 
         try:
-            receipt = response.get_receipt(client)
+            receipt = response.get_receipt(client.client)
         except ReceiptStatusError as error:
             raise RuntimeError(f"Receipt status failed: {error.status}") from error
 

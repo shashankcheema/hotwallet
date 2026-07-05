@@ -78,7 +78,7 @@ class HederaApplicationTests(unittest.TestCase):
         ), patch("hwallet.application.hedera_services.PrivateKey.from_string", return_value="private-key"):
             client = service.create_client("0.0.123", "operator-key")
 
-        self.assertIs(client, fake_client)
+        self.assertIs(client.client, fake_client)
         fake_client.set_operator.assert_called_once_with("account-id", "private-key")
 
     def test_execute_signed_hex_success_path(self) -> None:
@@ -87,12 +87,13 @@ class HederaApplicationTests(unittest.TestCase):
         fake_receipt = SimpleNamespace(status=ResponseCode.SUCCESS)
         fake_response = SimpleNamespace(get_receipt=MagicMock(return_value=fake_receipt))
         fake_transaction.execute.return_value = fake_response
+        network_client = SimpleNamespace(client=object())
 
         with patch.object(service, "rehydrate_tx_from_hex", return_value=fake_transaction), patch(
             "hwallet.application.hedera_services.TransactionResponse",
             SimpleNamespace,
         ):
-            result = service.execute_signed_hex("00ff", client=object())
+            result = service.execute_signed_hex("00ff", client=network_client)
 
         self.assertTrue(result.success)
         self.assertEqual(result.status, ResponseCode.SUCCESS)

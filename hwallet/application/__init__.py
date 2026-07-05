@@ -1,2 +1,2 @@
 from .hedera_services import ExecutionResult, HederaExecutionService, HederaSigningService
-
+from .network_client import HederaNetworkClient, NetworkClientWrapper

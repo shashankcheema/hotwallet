@@ -66,7 +66,8 @@ class CliTests(unittest.TestCase):
     def test_hedera_executor_main_prints_status(self) -> None:
         from hwallet.cli import hedera_executor
 
-        fake_client = SimpleNamespace(close=MagicMock())
+        fake_sdk_client = SimpleNamespace(close=MagicMock())
+        fake_client = SimpleNamespace(client=fake_sdk_client, close=fake_sdk_client.close)
         fake_service = MagicMock()
         fake_service.create_client.return_value = fake_client
         fake_service.execute_signed_hex.return_value = SimpleNamespace(status="SUCCESS")

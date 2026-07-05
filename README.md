@@ -48,6 +48,7 @@ Use either the installed Poetry scripts or `python -m` against the CLI modules:
 - `HederaSigningService.sign_unsigned(...)` rehydrates the transaction from bytes, signs it, and returns the signed wire payload.
 - `HederaSigningService.build_signed_transfer(...)` performs the full offline signing flow in one call.
 - Hedera Ed25519 derivation uses a fully hardened path: `m/44'/3030'/0'/0'/0'`.
+- `hwallet.application.network_client` defines the network-client wrapper protocol and adapter, so local tests can mock the full client boundary without touching testnet.
 
 ### Notes
 - Transaction IDs are generated locally, so the host clock should stay in sync with network time.
