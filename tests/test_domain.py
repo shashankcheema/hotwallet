@@ -6,6 +6,7 @@ from unittest.mock import patch
 from bip_utils import Bip39SeedGenerator
 
 from hwallet.domain.key_derivation import (
+    derive_hedera_ed25519_key,
     derive_ethereum_key,
     derive_solana_key,
     generate_entropy,
@@ -16,6 +17,7 @@ from hwallet.domain.key_derivation import (
 MNEMONIC = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"
 ETHEREUM_KEY = "1ab42cc412b618bdea3a599e3c9bae199ebf030895b039e9db1e30dafb12b727"
 SOLANA_KEY = "286b4b30f808ed46e986e5536939c4177b61588ac4a3080d228cb47edd798164"
+HEDERA_ED25519_KEY = "523f9ff611ac02e8e188617750e7e50feabd2ef9ee9b218a5c8ce2693275361d"
 
 
 class DomainKeyDerivationTests(unittest.TestCase):
@@ -44,3 +46,7 @@ class DomainKeyDerivationTests(unittest.TestCase):
     def test_derive_solana_key(self) -> None:
         seed_bytes = Bip39SeedGenerator(MNEMONIC).Generate()
         self.assertEqual(derive_solana_key(seed_bytes), SOLANA_KEY)
+
+    def test_derive_hedera_ed25519_key(self) -> None:
+        seed_bytes = Bip39SeedGenerator(MNEMONIC).Generate()
+        self.assertEqual(derive_hedera_ed25519_key(seed_bytes), HEDERA_ED25519_KEY)

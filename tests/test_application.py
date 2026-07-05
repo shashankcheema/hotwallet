@@ -28,7 +28,7 @@ class HederaApplicationTests(unittest.TestCase):
         try:
             self.assertEqual(
                 key_buffer.hex(),
-                "560f9f3c94558b6551928bb781cf6092c6b8800b4fc544af2c9444ed126d51aa",
+                "523f9ff611ac02e8e188617750e7e50feabd2ef9ee9b218a5c8ce2693275361d",
             )
         finally:
             for index in range(len(key_buffer)):

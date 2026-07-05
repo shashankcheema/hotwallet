@@ -3,6 +3,7 @@ import secrets
 from bip_utils import (
     Bip39MnemonicGenerator,
     Bip39SeedGenerator,
+    Bip32Slip10Ed25519,
     Bip44,
     Bip44Changes,
     Bip44Coins,
@@ -44,3 +45,18 @@ def derive_solana_key(seed_bytes: bytes) -> str:
     )
     return wallet.PrivateKey().Raw().ToHex()
 
+
+def _hardened(index: int) -> int:
+    return index | 0x80000000
+
+
+def derive_hedera_ed25519_key(
+    seed_bytes: bytes,
+    account_index: int = 0,
+    change_index: int = 0,
+    address_index: int = 0,
+) -> str:
+    node = Bip32Slip10Ed25519.FromSeed(seed_bytes)
+    for index in (44, 3030, account_index, change_index, address_index):
+        node = node.ChildKey(_hardened(index))
+    return node.PrivateKey().Raw().ToHex()

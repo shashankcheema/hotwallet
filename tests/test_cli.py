@@ -27,7 +27,7 @@ class CliTests(unittest.TestCase):
 
         with patch.dict(os.environ, {"SEED_PHRASE": "seed", "WALLET_PASSWORD": "pass"}, clear=True), patch.object(
             wallet_vault, "encryptWallet", return_value="payload"
-        ), patch.object(wallet_vault, "decryptWallet", return_value="seed"), patch.object(
+        ), patch.object(wallet_vault, "decryptWalletBytes", return_value=bytearray(b"seed")), patch.object(
             wallet_vault, "load_dotenv"
         ), patch.object(wallet_vault, "find_dotenv", return_value=""), patch("builtins.print") as print_mock:
             wallet_vault.main()

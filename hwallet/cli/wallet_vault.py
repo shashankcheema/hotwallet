@@ -4,7 +4,12 @@ import os
 
 from dotenv import find_dotenv, load_dotenv
 
-from hwallet.infrastructure.vault_crypto import decryptWallet, encryptWallet
+from hwallet.infrastructure.vault_crypto import decryptWalletBytes, encryptWallet
+
+
+def _zeroize(buffer: bytearray) -> None:
+    for index in range(len(buffer)):
+        buffer[index] = 0
 
 
 def main() -> None:
@@ -18,7 +23,11 @@ def main() -> None:
 
     payload = encryptWallet(seed_phrase, password)
     print(payload)
-    print(decryptWallet(payload, password))
+    plaintext_bytes = decryptWalletBytes(payload, password)
+    try:
+        print(plaintext_bytes.decode("utf-8"))
+    finally:
+        _zeroize(plaintext_bytes)
 
 
 if __name__ == "__main__":

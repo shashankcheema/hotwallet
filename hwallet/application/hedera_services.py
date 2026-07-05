@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import Any
 
-from bip_utils import Bip32Slip10Ed25519, Bip39SeedGenerator
+from bip_utils import Bip39SeedGenerator
 from hiero_sdk_python import (
     AccountId,
     Client,
@@ -17,6 +17,7 @@ from hiero_sdk_python import (
 )
 
 from hwallet.infrastructure.vault_crypto import decryptWalletBytes
+from hwallet.domain.key_derivation import derive_hedera_ed25519_key
 
 
 DEFAULT_NODE_ACCOUNT_ID = AccountId.from_string("0.0.3")
@@ -55,9 +56,7 @@ class HederaSigningService:
             seed_phrase = plaintext_bytes.decode("utf-8")
             seed_bytes = bytearray(Bip39SeedGenerator(seed_phrase).Generate())
             try:
-                return bytearray(
-                    Bip32Slip10Ed25519.FromSeed(bytes(seed_bytes)).PrivateKey().Raw().ToBytes()
-                )
+                return bytearray(bytes.fromhex(derive_hedera_ed25519_key(bytes(seed_bytes))))
             finally:
                 _zeroize(seed_bytes)
         finally:
