@@ -13,6 +13,8 @@ Use either the installed Poetry scripts or `python -m` against the CLI modules:
 
 - `wallet-keys` or `python -m hwallet.cli.wallet_keys`
 - `wallet-vault` or `python -m hwallet.cli.wallet_vault`
+- `register-account` or `python -m hwallet.cli.register_account`
+- `list-accounts` or `python -m hwallet.cli.list_accounts`
 - `hedera-signer` or `python -m hwallet.cli.hedera_signer`
 - `hedera-executor` or `python -m hwallet.cli.hedera_executor`
 
@@ -71,3 +73,6 @@ Runtime inputs are read from `.env` or the active environment by the CLI adapter
 - Use `TESTNET_OPERATOR_ID`, `TESTNET_OPERATOR_KEY`, and `TESTNET_NODE_ACCOUNT_ID` for testnet execution.
 - Use `PROD_OPERATOR_ID`, `PROD_OPERATOR_KEY`, and `PROD_NODE_ACCOUNT_ID` for production execution.
 - `hedera_signer` uses the active profile for the node account ID; `hedera_executor` uses the active profile for operator credentials and the client network.
+- `WALLET_STATE_PATH` points to the plain JSON state file that maps Hedera account IDs to public metadata and derivation indexes.
+- `hwallet.application.account_state` stores only non-sensitive metadata; private keys stay in the vault and are derived with the stored `address_index`.
+- Register one row per Hedera account in the state file and increase `address_index` for each new account derived from the same seed phrase.

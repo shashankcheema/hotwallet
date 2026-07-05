@@ -17,6 +17,8 @@ dependencies = [
 [project.scripts]
 wallet-keys = "hwallet.cli.wallet_keys:main"
 wallet-vault = "hwallet.cli.wallet_vault:main"
+register-account = "hwallet.cli.register_account:main"
+list-accounts = "hwallet.cli.list_accounts:main"
 hedera-signer = "hwallet.cli.hedera_signer:main"
 hedera-executor = "hwallet.cli.hedera_executor:main"
 

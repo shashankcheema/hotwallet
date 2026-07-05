@@ -50,13 +50,18 @@ class HederaSigningService:
         self,
         payload: str | dict[str, Any],
         password: str,
+        address_index: int = 0,
     ) -> bytearray:
         plaintext_bytes = decryptWalletBytes(payload, password)
         try:
             seed_phrase = plaintext_bytes.decode("utf-8")
             seed_bytes = bytearray(Bip39SeedGenerator(seed_phrase).Generate())
             try:
-                return bytearray(bytes.fromhex(derive_hedera_ed25519_key(bytes(seed_bytes))))
+                return bytearray(
+                    bytes.fromhex(
+                        derive_hedera_ed25519_key(bytes(seed_bytes), address_index=address_index)
+                    )
+                )
             finally:
                 _zeroize(seed_bytes)
         finally:

@@ -35,6 +35,74 @@ class CliTests(unittest.TestCase):
         print_mock.assert_any_call("payload")
         print_mock.assert_any_call("seed")
 
+    def test_register_account_main_writes_state(self) -> None:
+        from hwallet.cli import register_account
+
+        with patch.object(register_account, "WalletStateManager") as manager_cls, patch(
+            "sys.argv",
+            [
+                "register-account",
+                "--account-id",
+                "0.0.1001",
+                "--nickname",
+                "treasury",
+                "--public-alias",
+                "main-treasury",
+                "--state-path",
+                "wallet_state.json",
+            ],
+        ), patch("builtins.print") as print_mock:
+            manager = MagicMock()
+            manager.path = "wallet_state.json"
+            manager.register_account.return_value = SimpleNamespace(
+                account_id="0.0.1001",
+                nickname="treasury",
+                address_index=0,
+                public_alias="main-treasury",
+                public_key_hex=None,
+            )
+            manager_cls.return_value = manager
+            register_account.main()
+
+        manager.register_account.assert_called_once_with(
+            account_id="0.0.1001",
+            nickname="treasury",
+            public_alias="main-treasury",
+            public_key_hex=None,
+            address_index=None,
+        )
+        print_mock.assert_called_once()
+
+    def test_list_accounts_main_prints_accounts(self) -> None:
+        from hwallet.cli import list_accounts
+
+        with patch.object(list_accounts, "WalletStateManager") as manager_cls, patch(
+            "sys.argv",
+            ["list-accounts", "--state-path", "wallet_state.json"],
+        ), patch("builtins.print") as print_mock:
+            manager = MagicMock()
+            manager.list_accounts.return_value = [
+                SimpleNamespace(
+                    account_id="0.0.1001",
+                    nickname="treasury",
+                    address_index=0,
+                    public_alias="main-treasury",
+                    public_key_hex=None,
+                ),
+                SimpleNamespace(
+                    account_id="0.0.1002",
+                    nickname="ops",
+                    address_index=1,
+                    public_alias="ops-wallet",
+                    public_key_hex="abcd",
+                ),
+            ]
+            manager_cls.return_value = manager
+            list_accounts.main()
+
+        self.assertEqual(print_mock.call_count, 2)
+        manager.list_accounts.assert_called_once_with()
+
     def test_hedera_signer_main_prints_signed_hex(self) -> None:
         from hwallet.cli import hedera_signer
 
@@ -61,8 +129,12 @@ class CliTests(unittest.TestCase):
             hedera_signer,
             "resolve_hedera_network_profile",
             return_value=SimpleNamespace(network="testnet", node_account_id="0.0.3"),
-        ), patch("builtins.print") as print_mock:
+        ), patch.object(
+            hedera_signer,
+            "WalletStateManager",
+        ) as wallet_state_manager_cls, patch("builtins.print") as print_mock:
             account_id.from_string.side_effect = lambda value: value
+            wallet_state_manager_cls.return_value.resolve_address_index.return_value = 1
             hedera_signer.main()
 
         print_mock.assert_called_once_with("7369676e6564")

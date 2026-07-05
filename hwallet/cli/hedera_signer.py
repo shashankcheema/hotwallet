@@ -5,6 +5,7 @@ import os
 from dotenv import find_dotenv, load_dotenv
 from hiero_sdk_python import AccountId
 
+from hwallet.application.account_state import WalletStateManager
 from hwallet.application.hedera_services import HederaSigningService
 from hwallet.application.network_profile import resolve_hedera_network_profile
 
@@ -38,8 +39,15 @@ def main() -> None:
     tinybars = int(tinybars_value)
     profile = resolve_hedera_network_profile(require_credentials=False, require_node_account=True)
     node_account_id = AccountId.from_string(profile.node_account_id)
+    state_path = os.getenv("WALLET_STATE_PATH", "wallet_state.json")
+    state_manager = WalletStateManager(state_path)
+    address_index = state_manager.resolve_address_index(sender_account_id_value)
 
-    temporary_key_buffer = SIGNING_SERVICE.load_key_buffer(payload, password)
+    temporary_key_buffer = SIGNING_SERVICE.load_key_buffer(
+        payload,
+        password,
+        address_index=address_index,
+    )
     signed_transaction_bytes = SIGNING_SERVICE.build_signed_transfer(
         sender_account_id=sender_account_id,
         recipient_account_id=recipient_account_id,

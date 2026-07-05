@@ -34,6 +34,18 @@ class HederaApplicationTests(unittest.TestCase):
             for index in range(len(key_buffer)):
                 key_buffer[index] = 0
 
+    def test_load_key_buffer_honors_address_index(self) -> None:
+        service = HederaSigningService()
+        key_buffer = service.load_key_buffer(self.vault_payload, PASSWORD, address_index=1)
+        try:
+            self.assertEqual(
+                key_buffer.hex(),
+                "9dfb2c3f4948a104a36ac21e626f412ee120d52befc9bd9b8d8980b4c7d12bb4",
+            )
+        finally:
+            for index in range(len(key_buffer)):
+                key_buffer[index] = 0
+
     def test_build_unsigned_transfer_serializes_transaction(self) -> None:
         service = HederaSigningService()
         fixed_tx_id = TransactionId.from_string("0.0.1001@1700000000.000000000")
