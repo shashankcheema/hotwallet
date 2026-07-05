@@ -349,6 +349,44 @@ class WalletCliAppTests(unittest.TestCase):
                 )
 
             self.assertEqual(result.exit_code, 0, result.output)
-            self.assertIn("Consensus transaction ID:", result.output)
+            self.assertIn("Transaction ID:", result.output)
             signing_service.load_key_buffer.assert_called_once()
             execution_service.execute_signed_hex.assert_called_once()
+
+    def test_balance_alias_works(self) -> None:
+        from hwallet.cli import app as wallet_app
+
+        with self.runner.isolated_filesystem():
+            with open("wallet_state.json", "w", encoding="utf-8") as handle:
+                handle.write(
+                    json.dumps(
+                        {
+                            "version": 1,
+                            "accounts": [
+                                {
+                                    "account_id": "0.0.1001",
+                                    "nickname": "treasury",
+                                    "address_index": 0,
+                                }
+                            ],
+                        }
+                    )
+                )
+
+            fake_snapshot = SimpleNamespace(
+                account_id="0.0.1001",
+                hbar_balance_tinybars=1_000_000_000,
+                token_balances=[],
+            )
+
+            with patch.object(wallet_app, "resolve_hedera_network_profile", return_value=SimpleNamespace(network="testnet")), patch(
+                "hwallet.cli.app.MirrorNodeClient"
+            ) as mirror_client_cls:
+                mirror_client_cls.return_value.get_account_snapshot.return_value = fake_snapshot
+                result = self.runner.invoke(
+                    wallet_app.cli,
+                    ["bal", "--account-id", "0.0.1001", "--state-path", "wallet_state.json"],
+                )
+
+            self.assertEqual(result.exit_code, 0, result.output)
+            self.assertIn("HBAR: 10 HBAR", result.output)

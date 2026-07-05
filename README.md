@@ -12,6 +12,7 @@ This file is the shared project reference. Keep it updated as implementation cha
 Use either the installed Poetry scripts or `python -m` against the CLI modules:
 
 - `hwallet` or `python -m hwallet.cli.app`
+  - Short aliases: `bootstrap`, `bal`, `send`, `txs`
 - `wallet-keys` or `python -m hwallet.cli.wallet_keys`
 - `wallet-vault` or `python -m hwallet.cli.wallet_vault`
 - `register-account` or `python -m hwallet.cli.register_account`

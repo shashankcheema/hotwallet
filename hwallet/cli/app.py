@@ -18,6 +18,26 @@ from hwallet.infrastructure.vault_crypto import encryptVault
 
 SIGNING_SERVICE = HederaSigningService()
 EXECUTION_SERVICE = HederaExecutionService()
+CLI_ALIASES = {
+    "bootstrap": "init",
+    "bal": "balance",
+    "send": "transfer",
+    "txs": "history",
+}
+
+
+class WalletCLI(click.Group):
+    def get_command(self, ctx: click.Context, cmd_name: str):  # type: ignore[override]
+        command = super().get_command(ctx, cmd_name)
+        if command is not None:
+            return command
+        alias_target = CLI_ALIASES.get(cmd_name)
+        if alias_target is None:
+            return None
+        return super().get_command(ctx, alias_target)
+
+    def list_commands(self, ctx: click.Context) -> list[str]:  # type: ignore[override]
+        return super().list_commands(ctx)
 
 
 def _default_vault_path() -> str:
@@ -75,7 +95,11 @@ def _format_transaction_id(value: object) -> str:
     return str(value)
 
 
-@click.group()
+@click.group(
+    cls=WalletCLI,
+    help="Initialize a vault, inspect balances, send transfers, and review history.",
+    context_settings={"help_option_names": ["-h", "--help"]},
+)
 def cli() -> None:
     """Interactive wallet CLI."""
 
@@ -105,16 +129,12 @@ def init(vault_path: str, state_path: str, account_id: str, nickname: str, publi
         address_index=0,
     )
 
-    click.echo(f"Vault saved to {vault_path}")
-    click.echo(f"State saved to {state_path}")
+    click.echo(f"Vault saved: {vault_path}")
+    click.echo(f"State saved: {state_path}")
     click.echo(f"Mnemonic: {mnemonic}")
     click.echo(
-        {
-            "account_id": account.account_id,
-            "nickname": account.nickname,
-            "address_index": account.address_index,
-            "public_alias": account.public_alias,
-        }
+        f"Account registered: {account.account_id} "
+        f"({account.nickname}, index {account.address_index})"
     )
 
 
@@ -129,8 +149,7 @@ def balance(account_id: str | None, state_path: str) -> None:
     mirror_node = MirrorNodeClient(profile.network)
     snapshot = mirror_node.get_account_snapshot(account.account_id)
 
-    click.echo(f"Account: {snapshot.account_id}")
-    click.echo(f"Nickname: {account.nickname}")
+    click.echo(f"Account: {snapshot.account_id} ({account.nickname})")
     click.echo(f"HBAR: {_format_hbar(snapshot.hbar_balance_tinybars)}")
     if snapshot.token_balances:
         click.echo("Tokens:")
@@ -194,7 +213,7 @@ def transfer(
         _zeroize(temporary_key_buffer)
 
     click.echo(f"Status: {result.status}")
-    click.echo(f"Consensus transaction ID: {_format_transaction_id(result.receipt.transaction_id)}")
+    click.echo(f"Transaction ID: {_format_transaction_id(result.receipt.transaction_id)}")
 
 
 @cli.command()
@@ -217,13 +236,11 @@ def history(account_id: str | None, limit: int, state_path: str) -> None:
             if transfer.get("account") == account.account_id
         )
         click.echo(
-            {
-                "timestamp": transaction.get("consensus_timestamp"),
-                "transaction_id": transaction.get("transaction_id"),
-                "name": transaction.get("name"),
-                "result": transaction.get("result"),
-                "net_hbar": _format_hbar(int(net_hbar)),
-            }
+            f"{transaction.get('consensus_timestamp')} | "
+            f"{transaction.get('name')} | "
+            f"{transaction.get('result')} | "
+            f"{_format_hbar(int(net_hbar))} | "
+            f"{transaction.get('transaction_id')}"
         )
 
 
