@@ -1,0 +1,26 @@
+[project]
+name = "hwallet"
+version = "0.1.0"
+description = "hot wallet"
+authors = [
+    {name = "shashank.cheema@gmail.com"}
+]
+requires-python = ">=3.12"
+dependencies = [
+    "bip-utils==2.9.3",
+    "coincurve==20.0.0",
+    "pycryptodome>=3.15",
+    "hiero-sdk-python>=0.2.7",
+    "python-dotenv>=1.2.1",
+]
+
+[project.scripts]
+wallet-keys = "hwallet.cli.wallet_keys:main"
+wallet-vault = "hwallet.cli.wallet_vault:main"
+hedera-signer = "hwallet.cli.hedera_signer:main"
+hedera-executor = "hwallet.cli.hedera_executor:main"
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
