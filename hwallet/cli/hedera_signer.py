@@ -6,6 +6,7 @@ from dotenv import find_dotenv, load_dotenv
 from hiero_sdk_python import AccountId
 
 from hwallet.application.hedera_services import HederaSigningService
+from hwallet.application.network_profile import resolve_hedera_network_profile
 
 
 SIGNING_SERVICE = HederaSigningService()
@@ -19,7 +20,6 @@ def main() -> None:
     recipient_account_id_value = os.getenv("RECIPIENT_ACCOUNT_ID")
     tinybars_value = os.getenv("TRANSFER_TINYBARS")
     memo = os.getenv("TRANSFER_MEMO")
-    node_account_id_value = os.getenv("NODE_ACCOUNT_ID")
 
     if (
         not payload
@@ -36,11 +36,9 @@ def main() -> None:
     sender_account_id = AccountId.from_string(sender_account_id_value)
     recipient_account_id = AccountId.from_string(recipient_account_id_value)
     tinybars = int(tinybars_value)
-    node_account_id = (
-        AccountId.from_string(node_account_id_value)
-        if node_account_id_value
-        else None
-    )
+    profile = resolve_hedera_network_profile(require_credentials=False, require_node_account=True)
+    node_account_id = AccountId.from_string(profile.node_account_id)
+
     temporary_key_buffer = SIGNING_SERVICE.load_key_buffer(payload, password)
     signed_transaction_bytes = SIGNING_SERVICE.build_signed_transfer(
         sender_account_id=sender_account_id,

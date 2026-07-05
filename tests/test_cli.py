@@ -57,6 +57,10 @@ class CliTests(unittest.TestCase):
             hedera_signer, "AccountId"
         ) as account_id, patch.object(hedera_signer, "load_dotenv"), patch.object(
             hedera_signer, "find_dotenv", return_value=""
+        ), patch.object(
+            hedera_signer,
+            "resolve_hedera_network_profile",
+            return_value=SimpleNamespace(network="testnet", node_account_id="0.0.3"),
         ), patch("builtins.print") as print_mock:
             account_id.from_string.side_effect = lambda value: value
             hedera_signer.main()
@@ -76,13 +80,15 @@ class CliTests(unittest.TestCase):
             os.environ,
             {
                 "SIGNED_TRANSACTION_HEX": "00ff",
-                "OPERATOR_ID": "0.0.123",
-                "OPERATOR_KEY": "operator-key",
             },
             clear=True,
         ), patch.object(hedera_executor, "EXECUTION_SERVICE", fake_service), patch.object(
             hedera_executor, "load_dotenv"
-        ), patch.object(hedera_executor, "find_dotenv", return_value=""), patch("builtins.print") as print_mock:
+        ), patch.object(hedera_executor, "find_dotenv", return_value=""), patch.object(
+            hedera_executor,
+            "resolve_hedera_network_profile",
+            return_value=SimpleNamespace(network="testnet", operator_id="0.0.123", operator_key="operator-key"),
+        ), patch("builtins.print") as print_mock:
             hedera_executor.main()
 
         print_mock.assert_any_call("Status: SUCCESS")

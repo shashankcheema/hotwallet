@@ -111,8 +111,18 @@ class HederaSigningService:
 
 
 class HederaExecutionService:
-    def create_client(self, operator_id: str, operator_key: str) -> NetworkClientWrapper:
-        client = Client.for_testnet()
+    def create_client(
+        self,
+        network: str,
+        operator_id: str,
+        operator_key: str,
+    ) -> NetworkClientWrapper:
+        if network == "testnet":
+            client = Client.for_testnet()
+        elif network == "prod":
+            client = Client.for_mainnet()
+        else:
+            raise ValueError("network must be either 'testnet' or 'prod'.")
         client.set_operator(
             AccountId.from_string(operator_id),
             PrivateKey.from_string(operator_key),

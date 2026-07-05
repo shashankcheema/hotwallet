@@ -57,7 +57,7 @@ Use either the installed Poetry scripts or `python -m` against the CLI modules:
 ## Step 4: Network Execution
 
 ### Behavior
-- `HederaExecutionService.create_client(...)` creates a Hedera testnet client and applies operator credentials.
+- `HederaExecutionService.create_client(...)` creates a Hedera client for the active profile and applies operator credentials.
 - `HederaExecutionService.rehydrate_tx_from_hex(...)` converts signed hex back into a transaction object.
 - `HederaExecutionService.execute_signed_hex(...)` submits the transaction, fetches the receipt, and requires a success status.
 
@@ -67,3 +67,7 @@ Use either the installed Poetry scripts or `python -m` against the CLI modules:
 
 ## Environment
 Runtime inputs are read from `.env` or the active environment by the CLI adapters.
+- `HEDERA_NETWORK` selects the active profile: `testnet` or `prod`.
+- Use `TESTNET_OPERATOR_ID`, `TESTNET_OPERATOR_KEY`, and `TESTNET_NODE_ACCOUNT_ID` for testnet execution.
+- Use `PROD_OPERATOR_ID`, `PROD_OPERATOR_KEY`, and `PROD_NODE_ACCOUNT_ID` for production execution.
+- `hedera_signer` uses the active profile for the node account ID; `hedera_executor` uses the active profile for operator credentials and the client network.

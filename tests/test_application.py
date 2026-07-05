@@ -76,7 +76,7 @@ class HederaApplicationTests(unittest.TestCase):
             "hwallet.application.hedera_services.AccountId.from_string",
             return_value="account-id",
         ), patch("hwallet.application.hedera_services.PrivateKey.from_string", return_value="private-key"):
-            client = service.create_client("0.0.123", "operator-key")
+            client = service.create_client("testnet", "0.0.123", "operator-key")
 
         self.assertIs(client.client, fake_client)
         fake_client.set_operator.assert_called_once_with("account-id", "private-key")
