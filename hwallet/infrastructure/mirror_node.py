@@ -61,6 +61,9 @@ class MirrorNodeClient:
     def get_account_tokens(self, account_id: str) -> dict[str, Any]:
         return self._get_json(f"/api/v1/accounts/{account_id}/tokens")
 
+    def get_token_info(self, token_id: str) -> dict[str, Any]:
+        return self._get_json(f"/api/v1/tokens/{token_id}")
+
     def get_transactions(self, account_id: str, limit: int = 25) -> list[dict[str, Any]]:
         data = self._get_json(
             "/api/v1/transactions",

@@ -6,7 +6,7 @@ from pathlib import Path
 
 import click
 from bip_utils import Bip39SeedGenerator
-from hiero_sdk_python import AccountId
+from hiero_sdk_python import AccountId, TokenId
 
 from hwallet.application.account_state import ManagedAccount, WalletStateManager
 from hwallet.application.hedera_services import HederaExecutionService, HederaSigningService
@@ -23,6 +23,8 @@ CLI_ALIASES = {
     "bal": "balance",
     "send": "transfer",
     "txs": "history",
+    "assoc-token": "associate-token",
+    "toksend": "token-transfer",
 }
 
 
@@ -95,9 +97,33 @@ def _format_transaction_id(value: object) -> str:
     return str(value)
 
 
+def _parse_token_id(value: str) -> TokenId:
+    try:
+        return TokenId.from_string(value)
+    except Exception as error:  # pragma: no cover - click normalizes the message
+        raise click.BadParameter(f"Invalid token ID: {value}") from error
+
+
+def _parse_token_amount(amount_text: str, decimals: int) -> int:
+    try:
+        amount = Decimal(amount_text)
+    except Exception as error:
+        raise click.BadParameter(f"Invalid token amount: {amount_text}") from error
+    if amount <= 0:
+        raise click.BadParameter("Token amount must be greater than zero.")
+
+    scale = Decimal(10) ** decimals
+    smallest_units = amount * scale
+    if smallest_units != smallest_units.to_integral_value():
+        raise click.BadParameter(
+            f"Token amount {amount_text} has too many decimal places for {decimals} decimals."
+        )
+    return int(smallest_units)
+
+
 @click.group(
     cls=WalletCLI,
-    help="Initialize a vault, inspect balances, send transfers, and review history.",
+    help="Initialize a vault, inspect balances, send HBAR or HTS tokens, and review history.",
     context_settings={"help_option_names": ["-h", "--help"]},
 )
 def cli() -> None:
@@ -214,6 +240,137 @@ def transfer(
 
     click.echo(f"Status: {result.status}")
     click.echo(f"Transaction ID: {_format_transaction_id(result.receipt.transaction_id)}")
+
+
+@cli.command()
+@click.option("--token-id", required=True, callback=lambda _ctx, _param, value: _parse_token_id(value), help="Token ID to associate.")
+@click.option("--from-account", "owner_account_id", default=None, help="Source account ID.")
+@click.option("--memo", default="", show_default=False)
+@click.option("--vault-path", default=_default_vault_path, show_default=True)
+@click.option("--state-path", default=_default_state_path, show_default=True)
+def associate_token(
+    token_id: TokenId,
+    owner_account_id: str | None,
+    memo: str,
+    vault_path: str,
+    state_path: str,
+) -> None:
+    """Associate the configured account with an HTS token."""
+    profile = resolve_hedera_network_profile(require_credentials=True, require_node_account=True)
+    state_manager = WalletStateManager(state_path)
+    owner_account = _resolve_account(state_manager, owner_account_id)
+    passphrase = click.prompt("Vault passphrase", hide_input=True)
+    vault_payload = _read_vault_payload(vault_path)
+    temporary_key_buffer = SIGNING_SERVICE.load_key_buffer(
+        vault_payload,
+        passphrase,
+        address_index=owner_account.address_index,
+    )
+    try:
+        node_account_id = AccountId.from_string(profile.node_account_id)
+        signed_transaction_bytes = SIGNING_SERVICE.build_signed_token_association(
+            owner_account_id=AccountId.from_string(owner_account.account_id),
+            token_ids=[token_id],
+            temporary_key_buffer=temporary_key_buffer,
+            memo=memo,
+            node_account_id=node_account_id,
+        )
+        client = EXECUTION_SERVICE.create_client(
+            profile.network,
+            profile.operator_id,
+            profile.operator_key,
+        )
+        try:
+            result = EXECUTION_SERVICE.execute_signed_hex(signed_transaction_bytes.hex(), client)
+        finally:
+            client.close()
+    finally:
+        _zeroize(temporary_key_buffer)
+
+    click.echo(f"Status: {result.status}")
+    click.echo(f"Transaction ID: {_format_transaction_id(result.receipt.transaction_id)}")
+
+
+@cli.command()
+@click.option("--to", "recipient_account_id", prompt="Recipient account ID")
+@click.option("--token-id", required=True, callback=lambda _ctx, _param, value: _parse_token_id(value), help="Token ID to transfer.")
+@click.option(
+    "--amount",
+    type=str,
+    prompt="Token amount",
+    help="Fractional amount in human-readable units.",
+)
+@click.option(
+    "--decimals",
+    type=int,
+    default=None,
+    show_default=False,
+    help="Override token decimals if you do not want to infer them from Mirror Node.",
+)
+@click.option("--memo", default="", show_default=False)
+@click.option("--from-account", "sender_account_id", default=None, help="Source account ID.")
+@click.option("--vault-path", default=_default_vault_path, show_default=True)
+@click.option("--state-path", default=_default_state_path, show_default=True)
+def token_transfer(
+    recipient_account_id: str,
+    token_id: TokenId,
+    amount: str,
+    decimals: int | None,
+    memo: str,
+    sender_account_id: str | None,
+    vault_path: str,
+    state_path: str,
+) -> None:
+    """Sign, broadcast, and report an HTS token transfer."""
+    profile = resolve_hedera_network_profile(require_credentials=True, require_node_account=True)
+    state_manager = WalletStateManager(state_path)
+    sender_account = _resolve_account(state_manager, sender_account_id)
+    mirror_node = MirrorNodeClient(profile.network)
+    token_info = mirror_node.get_token_info(str(token_id))
+    token_decimals = token_info.get("decimals") if decimals is None else decimals
+    if token_decimals is None:
+        raise click.ClickException(f"Token metadata for {token_id} does not include decimals.")
+    token_decimals = int(token_decimals)
+    smallest_units = _parse_token_amount(amount, token_decimals)
+    recipient = AccountId.from_string(recipient_account_id)
+    sender = AccountId.from_string(sender_account.account_id)
+    passphrase = click.prompt("Vault passphrase", hide_input=True)
+    vault_payload = _read_vault_payload(vault_path)
+    temporary_key_buffer = SIGNING_SERVICE.load_key_buffer(
+        vault_payload,
+        passphrase,
+        address_index=sender_account.address_index,
+    )
+    try:
+        node_account_id = AccountId.from_string(profile.node_account_id)
+        signed_transaction_bytes = SIGNING_SERVICE.build_signed_token_transfer(
+            sender_account_id=sender,
+            recipient_account_id=recipient,
+            token_id=token_id,
+            amount=smallest_units,
+            decimals=None,
+            memo=memo,
+            temporary_key_buffer=temporary_key_buffer,
+            node_account_id=node_account_id,
+        )
+        client = EXECUTION_SERVICE.create_client(
+            profile.network,
+            profile.operator_id,
+            profile.operator_key,
+        )
+        try:
+            result = EXECUTION_SERVICE.execute_signed_hex(signed_transaction_bytes.hex(), client)
+        finally:
+            client.close()
+    finally:
+        _zeroize(temporary_key_buffer)
+
+    click.echo(f"Status: {result.status}")
+    click.echo(f"Transaction ID: {_format_transaction_id(result.receipt.transaction_id)}")
+    click.echo(
+        f"Token transfer: {amount} units of {token_info.get('symbol', str(token_id))} "
+        f"({smallest_units} base units, decimals={token_decimals})"
+    )
 
 
 @cli.command()

@@ -353,6 +353,125 @@ class WalletCliAppTests(unittest.TestCase):
             signing_service.load_key_buffer.assert_called_once()
             execution_service.execute_signed_hex.assert_called_once()
 
+    def test_associate_token_command_broadcasts_transaction(self) -> None:
+        from hwallet.cli import app as wallet_app
+
+        with self.runner.isolated_filesystem():
+            with open("wallet_state.json", "w", encoding="utf-8") as handle:
+                handle.write(
+                    json.dumps(
+                        {
+                            "version": 1,
+                            "accounts": [
+                                {
+                                    "account_id": "0.0.1001",
+                                    "nickname": "treasury",
+                                    "address_index": 0,
+                                }
+                            ],
+                        }
+                    )
+                )
+            with open("vault.json", "w", encoding="utf-8") as handle:
+                handle.write("{}")
+
+            fake_receipt = SimpleNamespace(transaction_id=SimpleNamespace(to_string=lambda: "0.0.1001@1.2.3"))
+            fake_result = SimpleNamespace(status="SUCCESS", receipt=fake_receipt)
+            fake_client = SimpleNamespace(close=MagicMock())
+
+            with patch.object(wallet_app, "resolve_hedera_network_profile", return_value=SimpleNamespace(network="testnet", operator_id="0.0.123", operator_key="key", node_account_id="0.0.3")), patch(
+                "hwallet.cli.app.SIGNING_SERVICE"
+            ) as signing_service, patch.object(wallet_app, "EXECUTION_SERVICE") as execution_service:
+                signing_service.load_key_buffer.return_value = bytearray(b"key")
+                signing_service.build_signed_token_association.return_value = b"signed-associate"
+                execution_service.create_client.return_value = fake_client
+                execution_service.execute_signed_hex.return_value = fake_result
+
+                result = self.runner.invoke(
+                    wallet_app.cli,
+                    [
+                        "associate-token",
+                        "--token-id",
+                        "0.0.2001",
+                        "--from-account",
+                        "0.0.1001",
+                        "--vault-path",
+                        "vault.json",
+                        "--state-path",
+                        "wallet_state.json",
+                    ],
+                    input="passphrase\n",
+                )
+
+            self.assertEqual(result.exit_code, 0, result.output)
+            self.assertIn("Transaction ID:", result.output)
+            signing_service.build_signed_token_association.assert_called_once()
+            execution_service.execute_signed_hex.assert_called_once()
+
+    def test_token_transfer_command_broadcasts_transaction(self) -> None:
+        from hwallet.cli import app as wallet_app
+
+        with self.runner.isolated_filesystem():
+            with open("wallet_state.json", "w", encoding="utf-8") as handle:
+                handle.write(
+                    json.dumps(
+                        {
+                            "version": 1,
+                            "accounts": [
+                                {
+                                    "account_id": "0.0.1001",
+                                    "nickname": "treasury",
+                                    "address_index": 0,
+                                }
+                            ],
+                        }
+                    )
+                )
+            with open("vault.json", "w", encoding="utf-8") as handle:
+                handle.write("{}")
+
+            fake_receipt = SimpleNamespace(transaction_id=SimpleNamespace(to_string=lambda: "0.0.1001@1.2.3"))
+            fake_result = SimpleNamespace(status="SUCCESS", receipt=fake_receipt)
+            fake_client = SimpleNamespace(close=MagicMock())
+
+            with patch.object(wallet_app, "resolve_hedera_network_profile", return_value=SimpleNamespace(network="testnet", operator_id="0.0.123", operator_key="key", node_account_id="0.0.3")), patch(
+                "hwallet.cli.app.MirrorNodeClient"
+            ) as mirror_client_cls, patch("hwallet.cli.app.SIGNING_SERVICE") as signing_service, patch.object(
+                wallet_app, "EXECUTION_SERVICE"
+            ) as execution_service:
+                signing_service.load_key_buffer.return_value = bytearray(b"key")
+                signing_service.build_signed_token_transfer.return_value = b"signed-token-transfer"
+                mirror_client_cls.return_value.get_token_info.return_value = {"decimals": 6, "symbol": "USDC"}
+                execution_service.create_client.return_value = fake_client
+                execution_service.execute_signed_hex.return_value = fake_result
+
+                result = self.runner.invoke(
+                    wallet_app.cli,
+                    [
+                        "token-transfer",
+                        "--to",
+                        "0.0.1002",
+                        "--token-id",
+                        "0.0.2001",
+                        "--amount",
+                        "12.3456",
+                        "--from-account",
+                        "0.0.1001",
+                        "--vault-path",
+                        "vault.json",
+                        "--state-path",
+                        "wallet_state.json",
+                    ],
+                    input="passphrase\n",
+                )
+
+            self.assertEqual(result.exit_code, 0, result.output)
+            self.assertIn("Transaction ID:", result.output)
+            self.assertIn("12.3456", result.output)
+            self.assertIn("USDC", result.output)
+            signing_service.build_signed_token_transfer.assert_called_once()
+            execution_service.execute_signed_hex.assert_called_once()
+
     def test_balance_alias_works(self) -> None:
         from hwallet.cli import app as wallet_app
 

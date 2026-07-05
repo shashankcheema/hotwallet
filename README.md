@@ -13,6 +13,8 @@ Use either the installed Poetry scripts or `python -m` against the CLI modules:
 
 - `hwallet` or `python -m hwallet.cli.app`
   - Short aliases: `bootstrap`, `bal`, `send`, `txs`
+  - HTS commands: `associate-token`, `token-transfer`
+  - `token-transfer` accepts fractional human-readable amounts and infers token decimals from Mirror Node when possible
 - `wallet-keys` or `python -m hwallet.cli.wallet_keys`
 - `wallet-vault` or `python -m hwallet.cli.wallet_vault`
 - `register-account` or `python -m hwallet.cli.register_account`
